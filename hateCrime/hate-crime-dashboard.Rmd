@@ -1,0 +1,324 @@
+---
+title: "Hate Crimes in United States"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(odbc)
+library(tidyverse)
+library(lubridate)
+library(plotly)
+library(htmltools)
+library(gt)
+library(scales)
+library(DT)
+
+```
+
+```{r, include=FALSE}
+
+#overview about the columns present in the imported dataSet
+ prova <- read_csv("hate_crime.csv") %>% str()
+
+prova
+#Just Select the column that I need 
+ hate_crimes <- read_csv("hate_crime.csv", 
+         col_select = c(
+                        "STATE_ABBR", 
+                        "STATE_NAME","DIVISION_NAME",
+                        "REGION_NAME",
+                        "POPULATION_GROUP_DESC",
+                        "INCIDENT_DATE",
+                        "TOTAL_OFFENDER_COUNT",
+                        "OFFENDER_RACE",
+                        "VICTIM_COUNT",
+                        "OFFENSE_NAME",
+                        "LOCATION_NAME",
+                        "BIAS_DESC",
+                        "VICTIM_TYPES",
+                        "MULTIPLE_OFFENSE",
+                        "MULTIPLE_BIAS")) %>%   # formatting data types
+mutate(INCIDENT_DATE = as_date(dmy(INCIDENT_DATE))) %>% #formatting factors
+   mutate(STATE_ABBR = as_factor(STATE_ABBR),
+          STATE_NAME = as_factor(STATE_NAME),
+          DIVISION_NAME = as_factor(DIVISION_NAME),
+          REGION_NAME = as_factor(REGION_NAME),
+          POPULATION_GROUP_DESC = as_factor(POPULATION_GROUP_DESC),
+          OFFENDER_RACE = as_factor(OFFENDER_RACE),
+          OFFENSE_NAME = as_factor(OFFENSE_NAME),
+          LOCATION_NAME = as_factor(LOCATION_NAME),
+          BIAS_DESC = as_factor(BIAS_DESC),
+          VICTIM_TYPES = as_factor(VICTIM_TYPES),
+          MULTIPLE_OFFENSE = as_factor(MULTIPLE_OFFENSE),
+          MULTIPLE_BIAS = as_factor(MULTIPLE_BIAS),
+          ) %>% drop_na(OFFENDER_RACE)
+  
+ 
+
+```
+
+
+
+```{r}
+# Collapse levels of 'BIAS_DESC'
+
+#remove multiple BIAS from 'BIAS_DESC' column, because I am interest in single Bias. My goal is show
+#the overall amount of bias in general, that is why I do not need double bias: every bias will be in a #broad category
+
+  hate_crimes_BIAS_relevel <- hate_crimes %>% 
+    separate(BIAS_DESC, into = c("BIAS_DESC"), sep = ";") %>% 
+  mutate(BIAS_DESC = as_factor(BIAS_DESC)) %>% 
+  mutate(BIAS_DESC =
+           fct_collapse(BIAS_DESC,
+                           race_ethnicity = c("Anti-Black or African American",
+                                              "Anti-White",
+                                              "Anti-Arab",
+                                              "Anti-Asian",
+                                              "Anti-Hispanic or Latino",
+                                              "Anti-Other Race/Ethnicity/Ancestry",
+                                              "Anti-Multiple Races, Group",
+                                              "Anti-American Indian or Alaska Native",
+                                              "Anti-Native Hawaiian or Other Pacific Islander"),
+                        
+                          sexual_orientation = c("Anti-Gay (Male)",
+                                                 "Anti-Heterosexual",
+                                                 "Anti-Lesbian (Female)",
+                                        "Anti-Lesbian, Gay, Bisexual, or Transgender (Mixed Group)",
+                                                  "Anti-Bisexual"),
+                                           
+                            religion = c(
+                                          "Anti-Jewish",
+                                          "Anti-Protestant",
+                                          "Anti-Other Religion",
+                                          "Anti-Islamic (Muslim)",
+                                          "Anti-Catholic",
+                                          "Anti-Multiple Religions, Group",
+                                          "Anti-Atheism/Agnosticism",
+                                          "Anti-Jehovah's Witness",
+                                          "Anti-Mormon",
+                                          "Anti-Buddhist",
+                                          "Anti-Sikh",
+                                          "Anti-Other Christian",
+                                          "Anti-Hindu",
+                                          "Anti-Eastern Orthodox (Russian, Greek, Other)"),
+                                      
+                                      disability = c("Anti-Physical Disability",
+                                                      "Anti-Mental Disability"),
+
+
+                                      gender_identity = c("Anti-Gender Non-Conforming",
+                                                          "Anti-Transgender"),
+                                      gender = c("Anti-Female",
+                                                 "Anti-Male"),
+                        
+                               Unknown_motivation = "Unknown (offender's motivation not known)")) %>% 
+  drop_na(OFFENDER_RACE)
+
+
+
+```
+
+ <b>Overview</b> {data-icon="fa-globe"}
+==========================================================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### {.no-padding}
+
+```{r}
+  valueBox(prettyNum(219557, big.mark = ","),caption = "<b>Total Crimes </b>", icon = "fa fa-id-badge",col="green")
+```
+
+
+### {.no-padding}
+```{r}
+
+valueBox(prettyNum(273917, big.mark = ","), caption = "<b>Total Victims </b>", icon = "fa fa-id-badge",col="orange")
+```
+
+
+
+### {.no-padding} 
+
+```{r}
+valueBox(prettyNum(209850, big.mark = ","), 273.917, caption = "<b>Total Offenders </b>", icon = "fa fa-id-badge",col="red")
+```
+
+
+### {.no-padding}
+
+
+```{r}
+ggplotly(hate_crimes_BIAS_relevel %>% 
+  group_by(OFFENDER_RACE, BIAS_DESC) %>% 
+  summarise(nOfOffenders = sum(TOTAL_OFFENDER_COUNT)) %>% 
+  ggplot(aes(nOfOffenders, fct_reorder(OFFENDER_RACE, nOfOffenders), fill =BIAS_DESC )) + geom_col() 
+  + xlab("Number Of Offenders") + ylab("Offenders Race") + labs(title = " <b>Number of Offenders Per Race </b>")
+ 
+  ) 
+```
+
+
+
+
+
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### {.no-padding}
+
+```{r}
+   
+ggplotly(hate_crimes %>%
+  group_by(year = year(INCIDENT_DATE)) %>% 
+  summarise(totalHatecrimes = n()) %>% 
+  ggplot(aes(year, totalHatecrimes)) + geom_line()
+   + xlab("Years") + ylab("Total Number of Hate Crimes") + labs(title = "<b>Total Number of Hate Crime Cases through each Year </b>")
+  )
+
+
+```
+
+
+### {.no-padding}
+
+```{r}
+ggplotly(hate_crimes_BIAS_relevel %>% 
+  filter(year(INCIDENT_DATE) == '2019' | year(INCIDENT_DATE) == '2020') %>% 
+  group_by(year = year(INCIDENT_DATE), BIAS_DESC) %>% 
+  summarise(totalNumber = n()) %>% 
+  ggplot(aes(BIAS_DESC, totalNumber, fill = as.factor(year) )) + geom_col(position = "dodge")
+  + xlab("Type of Bias") + ylab("Total Number of Hate Crimes") + labs(title = "<b>Total Number of crimes by comparing 2019 and 2020 </b>", fill = "<b>Years </b>" )
+  )
+```
+
+
+
+<b>Location</b>   {data-icon="fa fa-id-badge"}
+==========================================================================
+
+Column { data-width=450}
+-----------------------------------------------------------------------
+
+### {.no-padding}
+
+```{r}
+# I want plot all of thre on y axis. how?
+
+ggplotly(hate_crimes %>% 
+  group_by(REGION_NAME) %>% 
+  summarise(TotHateCrimes = n(),
+            TotOffenders = sum(TOTAL_OFFENDER_COUNT),
+            TotVictims = sum(VICTIM_COUNT)) %>% 
+  pivot_longer(cols = c('TotHateCrimes', 'TotOffenders', 'TotVictims'),
+               names_to = "Type", values_to = "total") %>% 
+  ggplot(aes(fct_reorder(REGION_NAME, total,.desc = TRUE), total, fill = as.factor(Type))) + geom_col(position = "dodge") 
+  + xlab("Region") + ylab("Total Numbers ") + labs(title = "<b> Total number of hate crimes, offenders and victims for each Region </b> ")
+  )
+
+```
+
+
+
+Column { data-width=450}
+-----------------------------------------------------------------------
+
+### {.no-padding}
+
+
+
+
+```{r}
+
+ggplotly(hate_crimes %>%
+  group_by(year = year(INCIDENT_DATE), REGION_NAME) %>% 
+  summarise(totalHatecrimes = n()) %>% 
+  ggplot(aes(year, totalHatecrimes, color = REGION_NAME)) + geom_line()
+  + xlab("Years") + ylab("Total Number of Hate Crimes") + labs(title = "<b>Total Number of Hate Crime Cases each Year per Region </b>")
+  
+  )
+```
+
+
+<b>Bias</b>  {data-icon="fa fa-times-rectangle"}
+==========================================================================
+
+Column 
+-----------------------------------------------------------------------
+
+### {.no-padding}
+
+
+```{r, echo = FALSE, include=FALSE}
+
+hate_crimes_BIAS_relevel %>% 
+  group_by(BIAS_DESC) %>% 
+  summarise(totalHatecrimes = n()) %>% 
+  mutate(percentage = round(totalHatecrimes/sum(totalHatecrimes) * 100 ,2))
+```
+
+
+```{r}
+
+# create Pie chart based on the output above
+
+ 
+     x<- c(40874,140805,1889,34387,1172)
+    labels <- c("Religion", "Race Ethnicity","Disability",  "Sexual Orientation",  "Gender Identity")
+    piepercent<- paste0(round(100*x/sum(x), 1), "%")
+
+pie(x, labels = piepercent, main = "Hate Crimes per bias motivation ", col = rainbow(length(x)))
+legend("topright", c("Religion","Race Ethnicity","Disability","Sexual Orientation","Gender Identity" ), cex = 0.5,
+   fill = rainbow(length(x)))
+
+```
+
+
+Column 
+-----------------------------------------------------------------------
+
+### {.no-padding}
+
+```{r}
+ 
+ group_victim <- hate_crimes_BIAS_relevel %>%  filter(VICTIM_COUNT > 10) %>% count(VICTIM_COUNT,sort = TRUE)
+
+ group_victim_10 <- semi_join(hate_crimes_BIAS_relevel, group_victim)
+ 
+ggplotly(group_victim_10 %>% 
+   group_by(BIAS_DESC) %>% 
+   summarise(totNum = n()) %>% 
+   ggplot(aes(fct_reorder(BIAS_DESC, totNum), totNum)) + geom_point()
+   + xlab("Bias Type") + ylab("Total Number of Hate Crimes") + labs(title = "<b>Total Hate Crimes per number of victims greater than 10 per Bias</b>")
+   ) 
+
+```
+
+
+### <b>Average days between two crimes Per Bias Type </b>
+
+
+
+```{r}
+avgTime <- hate_crimes_BIAS_relevel %>% 
+  select(BIAS_DESC, INCIDENT_DATE) %>% 
+  distinct(BIAS_DESC, INCIDENT_DATE, .keep_all = TRUE) %>% 
+  group_by(BiasType = BIAS_DESC) %>% 
+  summarise(numcrimes = n(),
+            maxMindate = max(INCIDENT_DATE) - min(INCIDENT_DATE)) %>% 
+  mutate(AverageDays = round(maxMindate / (numcrimes-1),2))
+ 
+ avgTimeFinal <- avgTime[c("BiasType", "AverageDays")] %>% head(6)
+
+
+
+  div(style = 'height:600px; overflow-y:scroll', gt(avgTimeFinal))
+```
+
