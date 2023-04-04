@@ -1,0 +1,533 @@
+---
+title: "Final assigmnent Roberto Conti"
+output:
+  html_document:
+    df_print: paged
+---
+
+<style>
+#question {
+  color: blue
+}
+#answer {
+  color: brown
+}
+</style>
+
+# Question: Which factor explain the increase or decrease in number of death due to Covid-19 in Italy?
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(moderndive)
+library(skimr)
+library(gapminder)
+```
+
+
+# New deaths versus date
+```{r}
+
+
+covidVaccDeathRatio <- read_csv("covid-vaccination-vs-death_ratio.csv")
+
+
+covidVaccDeathRatio_it <- covidVaccDeathRatio %>% filter(country == "Italy") %>% 
+  select("ID" = ...1, date, New_deaths) %>% mutate(ID = as.integer(ID))
+
+
+
+
+
+#link : https://www.kaggle.com/datasets/sinakaraji/covid-vaccination-vs-death
+```
+## 1. Exploratory Data Analysis
+
+The first step is to conduct an Exploratory Data Analysis, which we begin by looking at the raw data values.
+
+### (i) Examine the raw data values
+
+```{r}
+covidVaccDeathRatio_it %>% glimpse() 
+covidVaccDeathRatio_it %>% sample_n(5)
+```
+
+
+### (ii) Compute summary statistics
+
+```{r}
+covidVaccDeathRatio_it %>% select(date, New_deaths) %>%  skim()
+```
+### (iii) Create data visualisations
+
+```{r}
+covidVaccDeathRatio_it %>% 
+  ggplot(aes(date, New_deaths )) + geom_point() + geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+From this scatterplot, we can see a negative linear relationship between the Numbers of new deaths, and data. The problem is that we need a linear model, so we want to try to filter the date from March 2021 to August 2021, because there seems to be a linearity. Furthermore, in this range of dates it was the period in which, after a long time, another lock down was issued during the Easter period, so we want to see if there is a relationship between the lock down and the number of new deaths.
+
+```{r}
+covidVaccDeathRatio_it_date_filter <- covidVaccDeathRatio_it %>% 
+  filter(date >= "2021-03-01" & date <= "2021-08-31")
+
+
+```
+
+
+```{r}
+covidVaccDeathRatio_it_date_filter %>% 
+  ggplot(aes(date, New_deaths )) + geom_point() + geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE)
+
+```
+
+The dataset here is filtered from March 2021 to August 2021, and we can see a negative linear relationship: we can deduce that since the lockdown was imposed in April 2021, its positive effects should be noticed in the following months. In fact, from this scatterplot it can be seen that after the lockdown, the number of deaths decreases, until July, to then notice a slight increase during August, probably because the effect of the lockdown has disappeared. Here too we have a linearity curve, because probably given the nature of these data, a linear model cannot be used, in fact, the number of new deaths can continuously change by creating this curve. In this specific case, it is possible to note the growth around August, because the effect of the lockdown has probably disappeared and here in fact another upward curve is created, which however can curve downwards again due to other factors. A linear model can still be used, but it will probably be recommended to use in addition a curvilinear model.
+
+## 2. Simple Linear Regression
+
+In this step, we compute the linear regression coefficients.
+
+Recall the equation of the regression line 
+
+$\widehat{y} = b_0 + b_1 . x$
+
+Here, $b_0$ is the intercept coefficient (value of $\widehat{y}$ when $x$ is 0), while $b_1$ is the slope coefficient for $x$ (the increase in $\widehat{y}$ for every increase of 1 in $x$.)
+
+
+```{r}
+new_deaths_model <- lm(New_deaths ~ date, data = covidVaccDeathRatio_it_date_filter)
+new_deaths_model %>% get_regression_table()
+```
+
+We can notice that each increase of one day in Date corresponds to a decrease of new deaths of -2.65. Consequently, taking our specific case into consideration, after April ( when the lockdown was implemented), we notice a decrease in the number of new deaths. As for intercept $b_0$ = 49942.43 has no practical interpretation, because there is no date = 0
+Equation of the regression line:
+<p id="answer"> $\widehat{newDeaths} = 49942.43 - 2.65 . date$ </p>
+β<sub>1</sub> quantifies the relationship between new deaths and date for all days from March 2021 to August 2021.
+
+### (i) Find information on individual observations
+
+```{r}
+regression_points_d <- new_deaths_model %>% get_regression_points()
+regression_points_d
+```
+
+
+### (ii) Compute sum of squared residuals
+
+A *best-fitting line* refers to the line that minimizes the sum of squared residuals out of all possible lines we can draw through the points.
+
+```{r}
+regression_points_d %>%
+  mutate(squared_residuals = residual^2) %>%
+  summarize(sum_of_squared_residuals = sum(squared_residuals))
+
+```
+
+### (iii) Compute regression summaries
+
+```{r}
+new_deaths_model %>% get_regression_summaries()
+```
+
+R-squared or $R^2$ measures the strength of the relationship between the model and the dependent variable. From the above table, $R^2$ is 0.719, which is pretty high. It means that about 71% of the variation in the new deaths is completely explained by date. 
+
+
+
+
+<p id="answer"> <b>Null hypothesis</b>: numbers of new deaths are not influenced by the impose lockdown <br>
+<b>Alternative hypothesis </b>: numbers of new deaths are influenced by the impose lockdown </p>
+
+```{r}
+new_deaths_model %>% get_regression_table()
+```
+
+
+## Interpreting the regression table output for b0
+
+### Standard error
+
+ The std_error of the estimate intercept quantifies the variation in the intercept b<sub>0</sub> that we can expect between different samples. We can expect 2306.339 units of variation in the intercept for new deaths.
+
+
+
+### Test statistic (this applied just for the slope b1)
+
+The t-test is related to the hypothesis test when the slope is equal to 0 
+The *null hypothesis* $H_0$ assumes that the slope is 0 and that there is *no true relationship between new_deaths and date*.
+The *alternative hypothesis* $H_A$ assumes that the slope is not 0, which means that as the dates increases (day after day in chronological order), the number of new deaths decease (negative slope).
+
+### p-value (this applied just for the slope b1)
+
+The p-value is related to the hypothesis test. It used for observe if the slope of b1 is due to chance, where there is no relationship between number of new deaths and date. The p-value in this situation is 0 and suggest that we can reject the null-hypothesis, and accept the alternative hypothesis.
+
+### Confidence interval
+
+We are 95% confident that the intercept lies in the range between (45391.828,	54493.028).
+
+
+
+## Interpreting the regression table output for b1
+
+
+### Standard error
+
+The std_error of the fitted slope quantifies the variation in the fitted slope b<sub>1</sub> that we can expect between different samples. We can expect 0.123 units of variation in the slope. 
+
+
+### Test statistic
+
+The t-test is related to the hypothesis test when the slope is equal to 0 
+The *null hypothesis* $H_0$ assumes that the slope is 0 and that there is *no true relationship between new_deaths and date*.
+The *alternative hypothesis* $H_A$ assumes that the slope is not 0, which means that as the dates increases (day after day in chronological order), the number of new deaths decease (negative slope).
+
+
+The observed t-statistic is -21.580. More interesting is the p-value, which corresponds to how extreme this t-statistic is.
+
+### p-value
+
+The p-value is related to the hypothesis test. It used for observe if the slope of b1 is due to chance, where there is no relationship between number of new deaths and date. The p-value in this situation is 0 and suggest that we can reject the null-hypothesis, and accept the alternative hypothesis.
+
+
+### Confidence interval
+
+We are 95% confident that the slope lies in the range between (-2.893,	-2.408).
+
+
+
+
+
+## 3. Residual analysis
+
+### (i) Find information on individual observations
+
+For the observed value ${y}$, the fitted value ${\widehat y} = b_0 + b_1 . x$ and the residual is ${y - \widehat y}$.
+
+```{r}
+regression_points_d <- new_deaths_model %>% get_regression_points()
+regression_points_d
+```
+In the table generated, *New_deaths_hat* represents the fitted value \widehat y.
+
+
+
+## Conditions for inference
+
+
+### (1) **L**inearity of relationship
+
+Looking at the scatterplot reveals that the points are not scattered around the regression line. 
+We can denote that the data points tend to curve, consequently no, there is no linearity of relationship, consequently a curvilinear model would be more suitable. However, inferences can still be made with this model, and for further analyse use a different type of model (curvilinear)
+
+
+### (2) **I**ndependence of the residuals
+
+The variables are independent of each other
+
+```{r}
+regression_points_d %>% 
+  ggplot(aes(x = residual, y = lag(residual))) +
+  geom_point() +
+  labs(x = "Residual", y = "Previous residual")
+```
+
+The residual suggest dependence between residuals and observations, it can called autocorrelation
+
+### (3) **N**ormality of the residuals
+
+```{r}
+regression_points_d %>% ggplot(aes(x = residual)) +
+  geom_histogram(binwidth = 20, color = "white") +
+  labs(x = "Residual")
+```
+
+This histogram shows that there are more negative residuals than positive.
+The regression model makes more negative errors. But, the positive skew is not that drastic, so, we can say that the residuals are fairly normal distributed
+
+
+## (4) **E**quality of variance of the residuals
+
+
+```{r}
+regression_points_d %>% ggplot(aes(x = date , y = residual)) +
+  geom_point() +
+  labs(x = "Date", y = "Residual") +
+  geom_hline(yintercept = 0, col = "blue", size = 1)
+```
+
+Residual tend to go higher around april, then decrese and then increase again around July. This increase the estimated statistical error and decreasing the usefulness of the model.
+
+The errors are not homoskedastic.
+
+
+## Conclusion
+
+1. Linearity of relationship between variables: No
+2. Independence of residuals: No
+3. Normality of residuals: Somewhat
+4. Equality of variance: No
+
+This denotes that first of all we should try to use a curvilinear model, and try to create a different model, because maybe just one explenation variable is not enough. However, we can denote that r-squared is very strong. And we can see the previous results from the confidence interval and hypothesis tests as preliminary. Because while a preliminary analysis tells us that there is a significant relationship between the number of new deaths and dates, in-depth investigations are required. In particular it should be used a curvilinear model.
+
+
+# Number of deaths versus total vaccinations
+
+Next, let's see th differences in numbers of *new deaths* (outcome variable y) as a function of a different numerical variable: the *total vaccinations* (explanatory variable x).
+
+We carry out the same steps as above with the new explanatory variable. With the goal to compare them and make conclusion on which is the best model, or if we should to include more variables in the models.
+
+# Question: Which factor explain the increase or decrease in number of death due to Covid-19 in Italy?
+
+# New deaths versus total vaccinations 
+
+```{r}
+
+
+covidVaccDeathRatio <- read_csv("covid-vaccination-vs-death_ratio.csv")
+
+covidVaccDeathRatio_it_vacc <- covidVaccDeathRatio %>% filter(country == "Italy",
+                                                              date >= "2021-03-01" & date <= "2021-08-31" ) %>% 
+  select("ID" = ...1,  total_vaccinations, New_deaths, date) %>% mutate(ID = as.integer(ID))
+
+#link : https://www.kaggle.com/datasets/sinakaraji/covid-vaccination-vs-death
+```
+
+Even in this model we just wants to take into accounts data between March 2021 to August 2021, for the same issue about the curvelinearity of the model. Furthemore, it is important keep the same data for comparing in a proper way the model, we cannot use different dataset. 
+
+
+## 1. Exploratory Data Analysis
+
+The first step is to conduct an Exploratory Data Analysis, which we begin by looking at the raw data values.
+
+### (i) Examine the raw data values
+
+```{r}
+covidVaccDeathRatio_it_vacc %>% glimpse() 
+covidVaccDeathRatio_it_vacc %>% sample_n(5)
+```
+
+### (ii) Compute summary statistics
+
+```{r}
+covidVaccDeathRatio_it_vacc %>% select(New_deaths, total_vaccinations) %>%  skim()
+```
+### (iii) Create data visualisations
+
+```{r}
+ covidVaccDeathRatio_it_vacc %>% get_correlation(formula = New_deaths ~ total_vaccinations )
+```
+This correlation show a strong negative relationship between number of new deaths and total vaccinations. So, we should aspect that when the total number of vaccinations increase the numbers of new deaths decrease.
+
+```{r}
+covidVaccDeathRatio_it_vacc %>% mutate(Total_vaccinations_scale = total_vaccinations / 1000000) %>% 
+  ggplot(aes(Total_vaccinations_scale, New_deaths )) + geom_point() + geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+The dataset here is filtered from March 2021 to August 2021, and we can see a negative linear relationship: we can deduce that as the number of total vaccines increases, there is a decrease in the number of new deaths, but then the new deaths raise again. This is probably always in relation to the lockdown imposed in April and evidently the increase in total vaccines + the lockdown reduces the incidence of deaths. The surge that is noticed again around 70, probably is in relation to the fact that after 4 months without lockdown the number of deaths increases again, so we could deduce that the combination of lockdown + vaccines has an excellent impact on fighting Covid 19.
+
+
+
+## 2. Simple Linear Regression
+
+In this step, we compute the linear regression coefficients.
+
+Recall the equation of the regression line 
+
+$\widehat{y} = b_0 + b_1 . x$
+
+Here, $b_0$ is the intercept coefficient (value of $\widehat{y}$ when $x$ is 0), while $b_1$ is the slope coefficient for $x$ (the increase in $\widehat{y}$ for every increase of 1 in $x$.)
+
+
+```{r}
+new_deaths_model_vacc <- lm(New_deaths ~ total_vaccinations, data = covidVaccDeathRatio_it_vacc)
+new_deaths_model_vacc %>% get_regression_table()
+```
+
+
+In this case I do not really understand why the slope is 0, some anomalies could be spotted. In general it tell us that there is no relationship betweeen total vaccinations and numbers of new deaths.
+
+As for intercept $b_0$ = 341.405 has no practical interpretation, because in this dataset which is filtered by dates we do not start with 0 vaccinations, because in our filtered dataset vaccinations already start to be made long time before our filtered dates.
+
+Equation of the regression line:
+<p id="answer"> $\widehat{newDeaths} = 395.216 + 0 . totalVaccinations$ </p>
+
+
+
+## 3. Residual analysis
+
+### (i) Find information on individual observations
+
+For the observed value ${y}$, the fitted value ${\widehat y} = b_0 + b_1 . x$ and the residual is ${y - \widehat y}$.
+
+```{r}
+regression_points_vacc <- new_deaths_model_vacc %>% get_regression_points()
+regression_points_vacc
+```
+In the table generated, *New_deaths_hat* represents the fitted value \widehat y.
+
+### (ii) Compute sum of squared residuals
+
+A *best-fitting line* refers to the line that minimizes the sum of squared residuals out of all possible lines we can draw through the points.
+
+```{r}
+regression_points_vacc %>%
+  mutate(squared_residuals = residual^2) %>%
+  summarize(sum_of_squared_residuals = sum(squared_residuals))
+```
+
+
+## (iii) Compute regression summaries
+
+```{r}
+new_deaths_model_vacc %>% get_regression_summaries()
+```
+
+R-squared or $R^2$ measures the strength of the relationship between the model and the dependent variable. From the above table, $R^2$ is 0.726, which is pretty high. It means that about 72% of the variation in the new deaths is completely explained by Total Vaccinations. 
+
+
+<p id="answer"> <b>Null hypothesis</b>: numbers of new deaths are not influenced by total number of vaccinations <br>
+<b>Alternative hypothesis </b>: numbers of new deaths are influenced by the total number of vaccinations </p>
+
+
+```{r}
+new_deaths_model_vacc <- lm(New_deaths ~ total_vaccinations, data = covidVaccDeathRatio_it_vacc)
+new_deaths_model_vacc %>% get_regression_table()
+```
+
+## Interpreting the regression table output for b0
+
+### Standard error
+
+ The std_error of the estimate intercept quantifies the variation in the intercept b<sub>0</sub> that we can expect between different samples. We can expect 12.042 units of variation in the intercept for new deaths.
+
+
+
+### Test statistic (this applied just for the slope b1)
+
+The t-test is related to the hypothesis test when the slope is equal to 0 
+The *null hypothesis* $H_0$ assumes that the slope is 0 and that there is *no true relationship between new_deaths and total vaccinations*.
+The *alternative hypothesis* $H_A$ assumes that the slope is not 0, which means that as the number of total vaccinations increase, the number of new deaths decrease (negative slope).
+
+### p-value (this applied just for the slope b1)
+
+The p-value is related to the hypothesis test. It used for observe if the slope of b1 is due to chance, where there is no relationship between number of new deaths and total vaccinations. The p-value in this situation is 0 and suggest that we can reject the null-hypothesis, and accept the alternative hypothesis, but the slope is 0 so, according to the regression table there is no relationship between total numbers of vaccinations and new deaths
+
+### Confidence interval
+
+We are 95% confident that the intercept lies in the range between (371.456	418.976).
+
+
+
+## Interpreting the regression table output for b1
+
+
+### Standard error
+
+The std_error of the fitted slope quantifies the variation in the fitted slope b<sub>1</sub> that we can expect between different samples. We can expect 0 units of variation in the slope, because according to the regression table there is no relationship between number of newh deaths and total vaccinations,
+
+
+### Test statistic
+
+The t-test is related to the hypothesis test when the slope is equal to 0 
+The *null hypothesis* $H_0$ assumes that the slope is 0 and that there is *no true relationship between new_deaths and total vaccinations*.
+
+The observed t-statistic is -21.580. More interesting is the p-value, which corresponds to how extreme this t-statistic is.
+
+### p-value
+
+The p-value is related to the hypothesis test. It used for observe if the slope of b1 is due to chance, where there is no relationship between number of new deaths and total vaccinations. The p-value in this situation is 0, but because the slope is 0 according to the regression table, it detonate that there is no relationship between the total number of vaccinations and new deaths
+
+
+### Confidence interval
+
+Confidence interval is 0, this is another signal, which explain no relationship between the independent and depentend variable.
+
+
+
+
+
+## 3. Residual analysis
+
+### (i) Find information on individual observations
+
+For the observed value ${y}$, the fitted value ${\widehat y} = b_0 + b_1 . x$ and the residual is ${y - \widehat y}$.
+
+```{r}
+regression_points_vacc <- new_deaths_model_vacc %>% get_regression_points()
+regression_points_vacc
+```
+In the table generated, *New_deaths_hat* represents the fitted value \widehat y.
+
+
+
+## Conditions for inference
+
+
+### (1) **L**inearity of relationship
+
+Looking at the scatterplot reveals that the points are not scattered around the regression line. 
+We can denote that the data points tend to curve, consequently no, there is no linearity of relationship, consequently a curvilinear model would be more suitable. However, inferences can still be made with this model, and for further analyse use a different type of model (curvilinear)
+
+
+### (2) **I**ndependence of the residuals
+
+The variables are independent of each other
+
+```{r}
+regression_points_vacc %>% 
+  ggplot(aes(x = residual, y = lag(residual))) +
+  geom_point() +
+  labs(x = "Residual", y = "Previous residual")
+```
+
+The residual suggest dependence between residuals and observations, it can called autocorrelation
+
+### (3) **N**ormality of the residuals
+
+```{r}
+regression_points_vacc %>% ggplot(aes(x = residual)) +
+  geom_histogram(binwidth = 20, color = "white") +
+  labs(x = "Residual")
+```
+
+This histogram shows that there are more negative residuals than positive.
+The regression model makes more negative errors. But, the positive skew is not that drastic, so, we can say that the residuals are fairly normal distributed
+
+
+## (4) **E**quality of variance of the residuals
+
+
+```{r}
+regression_points_vacc %>% mutate(totalVacciScaled = total_vaccinations / 1000000) %>% 
+  ggplot(aes(x = totalVacciScaled , y = residual)) +
+  geom_point() +
+  labs(x = "Total Vaccinations Scaled", y = "Residual") +
+  geom_hline(yintercept = 0, col = "blue", size = 1)
+```
+
+Residual tend to go higher around 10  , then decrese and then increase again around 50. This increase the estimated statistical error and decreasing the usefulness of the model.
+
+The errors are not homoskedastic.
+
+
+## Conclusion
+
+1. Linearity of relationship between variables: No
+2. Independence of residuals: No
+3. Normality of residuals: Somewhat
+4. Equality of variance: No
+
+This denotes that first of all we should try to use a curvilinear model, and try to create a different model, because maybe just one explenation variable is not enough. The slope of 0 should denote that there is no relationshio between the dependent and indepent variable.
+
+However, we can denote that r-squared is very strong, so this anomaly require further investigation. And we can see the previous results from the confidence interval and hypothesis tests as preliminary due to this anomaly. Because while a preliminary analysis (r squared) tells us that there is a significant relationship between the number of new deaths and total vaccinations, in-depth investigations are required due to this anomaly.
+
+
+# Final conclusions about this two models
+
+After creating these two models with two different indipendent variables (dates and total vaccinations), it shows how the second model, due to the slope = 0, should be discarded as no relationship between number of new deaths and total vaccinations so accepting the NULL hypothesis , while the first shows a strong relationship so we can partially accept the alternative hypothesis, but future investigations should be performed: we should try with a curvilinear model, and then decide if accept totally the alternative hypothesis
+
+Important note about the second model is that perhaps there is an anomaly in the slope = 0, because r squared is very strong. Consequently what could be done is to implement the first model with another independent variable (total vaccination) and use a curvilinear model, in this case more precise and detailed inferences could be made.
+
